@@ -2,11 +2,64 @@ Homework reflection 1
 
 1. In Coding Quiz 1, you are asked to find the distance of the farthest match in a set.  Is this farthest match distance too far to be a meaningful match?  How can you decide this?
 
+> In the first quiz, I found that the farthest match distance is ~0.21. I believe that this farthest match distance is too far to be a meaningful match. This is because of several reasons:
+a. The distance represents about 21% of the entire range of the Z variable. The Z variable spans from 0 to 1. This means that it is a substantial distance in the context of the dataset.
+b. When using the radius approach in the quiz, we used a radius of 0.2 which might suggest that 0.2 is a reasonable threshold for meaningful matches. Sing 0.21 is over this (barely) we can say it shows that at least one match falls outside of what would be an acceptable distance.
+c. At the end of the quiz, I visualized the nearest neighbor matching and radius matching. We can see that matches with larger distances connect points that appear visually distinct, suggesting poorer quality matching.
+d. In the nearest neighbor matching, we saw that excessivly large distances can introduce vias because they force comparisons between units that are not fundamentally similar. This goes against the assumption that matches pairs should be similar on observed covariates.
+We can further decide this by considering the distribution of the covariate (Z), examine how the effect estimate changes when excliding distanct matches, and apply domain knowledge about what a meaningful similarity would be in the context of the data.
+
+
 2. In Coding Quiz 1, there are two approaches to matching: 
 (A) Picking the best match X = 0 corresponding to each X = 1 using Z values.
 (B) Using radius_neighbors to pick all matches X = 0 within a distance or 0.2 of each X = 1.
 
 Invent your own type of matching similar to 1 and 2 (or look one up on the internet), which has a different way to pick the matches in X = 0.  Clearly explain the approach you invented or found.
+
+For this quesiton I attempted Propensity Score Caliper Matching with Replacement
+First we estimate the propensity scores. We do this by modeling the pobability of being in the treatment group (X = 1) based on Z. We do this by using logistic regression to estimate each observation's proabability of recieving treatment. These probablilties(propensity scores) become the bases for our matching. We transform the data by standardizing the matching variable and extend it naturally to multiple covariate.
+We then apply caliper matching with replacemnt. This means that for each treatment observation (X = 1), we calculate distance to all control observation (X = 0) in terms of propensity scores. We then apply a caliper constraint by only considering controls within 0.1 std deviation of the propensity score distribution which in our case is 0.0168. We allow control observations to be used multiple times (which is done with replacemnt). For each treatment, we select all controls that fall within the caliper.
+Lastly, we calculate the treatment effect. We do this by calculating the averate Y of the match controls for each matched treatment observation. We then compare the averate Y of treatment observations with an average of these control means. 
+
+Here are the results of this process:
+Propensity score standard deviation: 0.1684
+Caliper width (0.1 std): 0.0168
+Number of treatment observations matched: 29 out of 48
+Average number of matches per treatment observation: 3.52
+Minimum number of matches: 1
+Maximum number of matches: 10
+Number of unique control observations used: 39 out of 52
+Controls used more than once: 30 (76.9%)
+
+Treatment Effect Estimate:
+Average Y for matched treatment observations: 1.0119
+Average Y for matched control observations: 0.5088
+Estimated treatment effect: 0.5031
+
+From the results of this implementation we can make some key observations:
+- 60.4% of treatment observations (29/48) found suitable matches
+- Each matched treatment had an average of 3.52 control matches
+- The number of matches varied widely (1-10 per treatment)
+- The estimated treatment effect is 0.5031
+
+There are several advantages we observed from performing this method.
+- There is a balance between quality and quantity. This is because the caliper ensures matchi quality while allowing multiple matches where appropriate.
+- There is an efficient use of data because the control observations can be reused when they provide good matches.
+- Not all treatment observations need to be matches if there is no suitable control that exists.
+- Using propensity scores and calibrating the caliper to the std deviation has theoretical justification. Plus we visualize mamtches via our histogram and scatter plots.
+
+This method differs from the original two methods:
+Versus Method A (Best 1:1 Match):
+- Uses propensity scores instead of raw Z values
+- Allows multiple control matches per treatment rather than just one
+- Rejects treatment observations that have no good matches within the caliper
+- Permits control observations to be matched multiple times
+
+
+Versus Method B (Radius Matching):
+- Uses a data-driven caliper (proportion of standard deviation) rather than fixed radius
+- Matches based on propensity scores rather than raw Z values
+- Scales the matching threshold according to the data's distribution
 
 Homework reflection 2
 
