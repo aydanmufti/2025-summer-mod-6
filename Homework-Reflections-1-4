@@ -70,8 +70,46 @@ Homework reflection 2
 Homework reflection 3
 
 1. In the event study in Coding Quiz 3, how would we go about testing for a change in the second derivative as well?
+To test for changes in the second derivative (curvature) at an event, we need to extend our regression model to include terms that capture acceleration changes.
+
+The Standard Event Study model from Coding Quiz 3:
+Y = α + β₁*time + β₂*post_event + β₃*(time-event_time)*post_event + ε
+Note that
+- β₂ captures level discontinuity (jump in Y)
+- β₃ captures first derivative discontinuity (change in slope)
+
+To extend the model for the second derivative, it would look like:
+Y = α + β₁*time + β₂*time² + β₃*post_event + 
+    β₄*(time-event_time)*post_event + β₅*(time-event_time)²*post_event + ε
+
+The gamma variables change to represent:
+- β₂ captures the baseline curvature (second derivative before event)
+- β₅ captures the CHANGE in second derivative after the event
+
+We can also write it as:
+Y = α + β₁*time + β₂*time² + β₃*post_event + 
+    β₄*time*post_event + β₅*time²*post_event + ε
+where β₅ directly captures the change in curvature after the event
+
 
 2. Create your own scenario that illustrates differences-in-differences. Describe the story behind the data and show whether there is a nonzero treatment effect.
+
+My scenario is the Effect of Salary Cap on Competitive Balance in Professional Sports
+
+The NHL is a professional sports leage with a hard salary cap whereas the MLB does not have one except for luxury tax. Let's say the NHL sets up a salary cap in 2020 and the MLB continues without thier cap. Let's measure the causal effect of salary caps on competitive balance in professional sports. 
+
+Breakdown:
+- Treatment Group: NHL Teams with implemented salary cap in 2020
+- Control Group: MLB teams with no salary cap
+- Time Period: Before (2015 - 2019) and After  (2020 - 2025) the cap implementation
+- Outcome: Competitive balance measured by standard deviation of win percentages
+
+We can use the differences-in-differences assuming that  without the salary cap, NHL and MLB would have had parallel trends in competitive balance. In sports, salary caps should reduce payroll disparities between teams, lower payroll disparities should lead to more balanced competition, and we can expect a reduced standard deviation of win percentages (more parity meaning a better competitve balance). 
+
+
+
+Hypothesis: Salary cap implementation increases competitive balance
+
 
 Homework reflection 4
 
