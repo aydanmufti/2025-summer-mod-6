@@ -2,7 +2,7 @@ Homework reflection 1
 
 1. In Coding Quiz 1, you are asked to find the distance of the farthest match in a set.  Is this farthest match distance too far to be a meaningful match?  How can you decide this?
 
-> In the first quiz, I found that the farthest match distance is ~0.21. I believe that this farthest match distance is too far to be a meaningful match. This is because of several reasons:
+In the first quiz, I found that the farthest match distance is ~0.21. I believe that this farthest match distance is too far to be a meaningful match. This is because of several reasons:
 a. The distance represents about 21% of the entire range of the Z variable. The Z variable spans from 0 to 1. This means that it is a substantial distance in the context of the dataset.
 b. When using the radius approach in the quiz, we used a radius of 0.2 which might suggest that 0.2 is a reasonable threshold for meaningful matches. Sing 0.21 is over this (barely) we can say it shows that at least one match falls outside of what would be an acceptable distance.
 c. At the end of the quiz, I visualized the nearest neighbor matching and radius matching. We can see that matches with larger distances connect points that appear visually distinct, suggesting poorer quality matching.
@@ -114,5 +114,120 @@ Hypothesis: Salary cap implementation increases competitive balance
 Homework reflection 4
 
 1. The Coding Quiz gives two options for instrumental variables.  For the second item (dividing the range of W into multiple ranges), explain how you did it, show your code, and discuss any issues you encountered.
+
+To implement the W-Range Apprach, I devided the confounder W into multiple ranges and calculating IV estimates within each range.
+
+Step 1 - I created the range:
+/# Create narrow ranges of W
+W_min, W_max = W.min(), W.max()
+n_ranges = 10  # Number of ranges to create
+range_width = (W_max - W_min) / n_ranges
+
+print(f"W ranges from {W_min:.3f} to {W_max:.3f}")
+print(f"Creating {n_ranges} ranges, each of width {range_width:.3f}")
+
+The result from this was that:
+- W ranged from -3.303 to 4.783
+- Created 10 equal-width ranges, each of width 0.809
+
+Step 2 - Estimate IV Within Each Range
+iv_estimates_by_range = []
+range_centers = []
+
+for i in range(n_ranges):
+    # Define range boundaries
+    w_lower = W_min + i * range_width
+    w_upper = W_min + (i + 1) * range_width
+    range_center = (w_lower + w_upper) / 2
+    
+    # Select observations in this range
+    in_range = (W >= w_lower) & (W < w_upper)
+    if i == n_ranges - 1:  # Include the maximum value in the last range
+        in_range = (W >= w_lower) & (W <= w_upper)
+    
+    n_obs_in_range = np.sum(in_range)
+    
+    # Skip ranges with insufficient data
+    if n_obs_in_range < 10:
+        continue
+    
+    # Extract data for this range
+    Z_range = Z[in_range]
+    X_range = X[in_range]
+    Y_range = Y[in_range]
+    
+    # Check if we have both Z=0 and Z=1 in this range
+    has_Z0 = np.any(Z_range == 0)
+    has_Z1 = np.any(Z_range == 1)
+    
+    if not (has_Z0 and has_Z1):
+        continue
+    
+    # Calculate IV estimate within this range (Wald estimator)
+    Y_mean_Z1_range = Y_range[Z_range == 1].mean()
+    Y_mean_Z0_range = Y_range[Z_range == 0].mean()
+    X_mean_Z1_range = X_range[Z_range == 1].mean()
+    X_mean_Z0_range = X_range[Z_range == 0].mean()
+    
+    delta_Y_range = Y_mean_Z1_range - Y_mean_Z0_range
+    delta_X_range = X_mean_Z1_range - X_mean_Z0_range
+    
+    if abs(delta_X_range) > 1e-10:
+        iv_estimate_range = delta_Y_range / delta_X_range
+        iv_estimates_by_range.append(iv_estimate_range)
+        range_centers.append(range_center)
+
+
+I then collected the results:
+
+/# Average the IV estimates across ranges
+if iv_estimates_by_range:
+    iv_estimate_approach2 = np.mean(iv_estimates_by_range)
+    iv_std_approach2 = np.std(iv_estimates_by_range)
+
+    print(f"\nIV Estimate (Approach 2 - Average across ranges): {iv_estimate_approach2:.4f}")
+    print(f"Standard deviation across ranges: {iv_std_approach2:.4f}")
+    
+    # Plot IV estimates by range
+    plt.figure(figsize=(10, 6))
+    plt.scatter(range_centers, iv_estimates_by_range, alpha=0.7, s=50)
+    plt.axhline(y=iv_estimate_approach2, color='red', linestyle='--', 
+                label=f'Average IV Estimate = {iv_estimate_approach2:.4f}')
+    if 'iv_estimate_approach1' in locals():
+        plt.axhline(y=iv_estimate_approach1, color='blue', linestyle='--', 
+                    label=f'Approach 1 Estimate = {iv_estimate_approach1:.4f}')
+    plt.xlabel('W Range Center')
+    plt.ylabel('IV Estimate')
+    plt.title('IV Estimates by W Range (Approach 2)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+else:
+    print("Could not calculate IV estimates for any ranges")
+
+For the results I got:
+W ranges from -3.303 to 4.783
+Creating 10 ranges, each of width 0.809
+Range [-3.30, -2.49]: n=36, IV estimate=1.1462
+Range [-2.49, -1.69]: n=158, IV estimate=1.8387
+Range [-1.69, -0.88]: n=773, IV estimate=1.4396
+Range [-0.88, -0.07]: n=1452, IV estimate=1.5340
+Range [-0.07, 0.74]: n=1474, IV estimate=1.5724
+Range [0.74, 1.55]: n=789, IV estimate=1.5084
+Range [1.55, 2.36]: n=272, IV estimate=1.3114
+Range [2.36, 3.17]: n=38, IV estimate=1.5150
+
+IV Estimate (Approach 2 - Average across ranges): 1.4832
+Standard deviation across ranges: 0.1883
+![alt text](image.png)
+
+
+For the final results the overall IV estimate was 1.4832. The standard deviation across ranges was 0.1883. To compare with my initial approach of calculating the simple differences in means, approach 1 calculated 1.5619.
+
+Issues:
+Some issues that I found involved:
+a. Sparse data in some of the extreme ranges
+    - Some W ranges mainly at the extremes above had very few observations. A solution for this would
+
 
 2. Plot the college outcome (Y) vs. the test score (X) in a small range of test scores around 80. On the plot, compare it with the Y probability predicted by logistic regression. The ground truth Y value is 0 or 1; don't just plot 0 or 1 - that will make it unreadable.  Find some way to make it look better than that.
