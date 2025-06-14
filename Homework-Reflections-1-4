@@ -106,9 +106,7 @@ Breakdown:
 
 We can use the differences-in-differences assuming that  without the salary cap, NHL and MLB would have had parallel trends in competitive balance. In sports, salary caps should reduce payroll disparities between teams, lower payroll disparities should lead to more balanced competition, and we can expect a reduced standard deviation of win percentages (more parity meaning a better competitve balance). 
 
-
-
-Hypothesis: Salary cap implementation increases competitive balance
+My hypothesis: Salary cap implementation increases competitive balance
 
 
 Homework reflection 4
@@ -117,10 +115,10 @@ Homework reflection 4
 
 To implement the W-Range Apprach, I devided the confounder W into multiple ranges and calculating IV estimates within each range.
 
-Step 1 - I created the range:
+Step 1 - Create The Range:
 /# Create narrow ranges of W
 W_min, W_max = W.min(), W.max()
-n_ranges = 10  # Number of ranges to create
+n_ranges = 10  # Number of ranges created
 range_width = (W_max - W_min) / n_ranges
 
 print(f"W ranges from {W_min:.3f} to {W_max:.3f}")
@@ -135,14 +133,14 @@ iv_estimates_by_range = []
 range_centers = []
 
 for i in range(n_ranges):
-    # Define range boundaries
+    # Initializing range boundaries
     w_lower = W_min + i * range_width
     w_upper = W_min + (i + 1) * range_width
     range_center = (w_lower + w_upper) / 2
     
     # Select observations in this range
     in_range = (W >= w_lower) & (W < w_upper)
-    if i == n_ranges - 1:  # Include the maximum value in the last range
+    if i == n_ranges - 1:  # Include the max value in the last range
         in_range = (W >= w_lower) & (W <= w_upper)
     
     n_obs_in_range = np.sum(in_range)
@@ -219,7 +217,7 @@ Range [2.36, 3.17]: n=38, IV estimate=1.5150
 
 IV Estimate (Approach 2 - Average across ranges): 1.4832
 Standard deviation across ranges: 0.1883
-![alt text](image.png)
+![alt text](ivestimatesbywrange.png)
 
 
 For the final results the overall IV estimate was 1.4832. The standard deviation across ranges was 0.1883. To compare with my initial approach of calculating the simple differences in means, approach 1 calculated 1.5619.
@@ -227,7 +225,106 @@ For the final results the overall IV estimate was 1.4832. The standard deviation
 Issues:
 Some issues that I found involved:
 a. Sparse data in some of the extreme ranges
-    - Some W ranges mainly at the extremes above had very few observations. A solution for this would
+    - Some W ranges, mainly at the extremes, above had very few observations. A solution for this would be to skip the ranges with less than 10 observations to avoid unreliable estimates. So for me, two ranges were excluded from analysis to improve estimate reliability.
+b. Missing some treatment groups
+    - Some of my ranges missed the Z=0 or Z=1 observations. We can then only analyze rnages with both treatment and control groups. This is because we cannot calculate IV estimate without both groups for comparison.
+c. Instrument weakness in some of the ranges
+    - Some of the ranges had delta X = 0, which means the instument doesn't affect the treatment. To mitigate this I skiped ranges where the absolute value of delta X is less than 1e-10. We did this because these ranges do not contribute to causal identification.
+
 
 
 2. Plot the college outcome (Y) vs. the test score (X) in a small range of test scores around 80. On the plot, compare it with the Y probability predicted by logistic regression. The ground truth Y value is 0 or 1; don't just plot 0 or 1 - that will make it unreadable.  Find some way to make it look better than that.
+
+![alt text](DatasetA_CollegeOutcomeVSTestScore.png)
+
+![alt text](DatasetB_CollegeOutcomeVSTestScore.png)
+
+ANALYZING Dataset A
+------------------------------------------------------------
+Total observations in dataset: 100000
+Observations in window [60, 100]: 97772
+SUCCESS: Proceeding with analysis
+   X range in window: [60.0, 100.0]
+   Y range in window: [0.0, 1.0]
+   Unique Y values: [0 1]
+   Binary outcome (0/1): True
+   Fitting logistic regression...
+   Creating Plot 1: Raw Data with Jitter
+   Creating Plot 2: Binned Averages with Logistic Regression
+   Creating Plot 3: Moving Average with Confidence Bands
+   Creating Plot 4: Separate Logistic Fits Before/After Cutoff
+   Observations before cutoff: 47698
+   Observations after cutoff: 50074
+
+   LOGISTIC REGRESSION RESULTS:
+   - Overall coefficient: 0.056408
+   - Overall intercept: -4.724235
+   - Predicted probability at cutoff (80): 0.4473
+   - Probability just before cutoff: 0.3051
+   - Probability just after cutoff: 0.6008
+   - Discontinuity at cutoff: 0.2957
+   - Slope before cutoff: 0.001231
+   - Slope after cutoff: 0.000672
+   - Slope change: -0.000560
+   - Large discontinuity detected - strong treatment effect
+
+ANALYZING Dataset B
+------------------------------------------------------------
+Total observations in dataset: 100000
+Observations in window [60, 100]: 97716
+SUCCESS: Proceeding with analysis
+   X range in window: [60.0, 100.0]
+   Y range in window: [0.0, 1.0]
+   Unique Y values: [0 1]
+   Binary outcome (0/1): True
+   Fitting logistic regression...
+   Creating Plot 1: Raw Data with Jitter
+   Creating Plot 2: Binned Averages with Logistic Regression
+   Creating Plot 3: Moving Average with Confidence Bands
+   Creating Plot 4: Separate Logistic Fits Before/After Cutoff
+   Observations before cutoff: 47784
+   Observations after cutoff: 49932
+
+   LOGISTIC REGRESSION RESULTS:
+   - Overall coefficient: 0.115625
+   - Overall intercept: -7.706836
+   - Predicted probability at cutoff (80): 0.8239
+   - Probability just before cutoff: 0.6998
+   - Probability just after cutoff: 0.8853
+   - Discontinuity at cutoff: 0.1855
+   - Slope before cutoff: 0.044387
+   - Slope after cutoff: 0.106180
+   - Slope change: 0.061793
+   - Large discontinuity detected - strong treatment effect
+
+I used 5 solutions to analyze and plot this data to make it readable.
+1. Adding Jitter To Raw Data Scatter Plot
+   - Added small random noise (±0.05) to Y-axis to spread overlapping points
+   - Used color coding (red/blue colormap) to distinguish actual 0s from 1s
+   - Added black edge colors for better point definition
+   - This allowed us to see individual observations while preserving binary nature
+
+2. Plotting Binned Averages:
+   - Grouped observations into bins along X-axis
+   - Calculated mean Y within each bin (proportion who got into college)
+   - Sized points by number of observations in bin
+   - Overlaid smooth logistic regression curve
+   - With this plot we can see that it is cleaner than individual 0/1 points, shows clear trends
+
+3. Plotting Moving Averages With Confidence Bands: 
+   - Calculated local averages using sliding window
+   - Added 95% confidence intervals (±1.96 * standard error)
+   - Smooths out noise while preserving local trends
+   - This shows uncertainty and local probability trends
+
+4. Separating Logistic Fits
+   - Fit different logistic models before and after cutoff
+   - Allows for discontinuities at the cutoff point
+   - Shows potential treatment effects clearly
+   - This plot reveals regression discontinuity as jump in probability
+
+5. Logistic Regression Overlay:
+   - Fits smooth probability curve through all data
+   - Transforms binary outcome to interpretable probabilities
+   - Red curve shows predicted probability of college admission
+   - This allows for a natural interpretation for binary outcomes
