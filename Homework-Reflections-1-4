@@ -65,11 +65,40 @@ Homework reflection 2
 
 1. Invent an example situation that would use fixed effects.
 
+An example of a situation that would use fixed effects would be a situation that I am actually connected to and one that is strangly in some of the media I consume! My family works in education and is getting new technology at their school. There is also this tv show that involves different levels of tutoring and how that can help improve student's test scores that I am watching (Crash Course Romance). This makes me think of a situation that could use fixed effects:
+
+We could look at a school district that wanted to evaluate the effectiveness of a new educational technology platform on student math scores. They could implement this program across 3 differnt types of schools and track the student performance scores over time.
+
+This works with fixed effects as each school will have different characteristics based on resources that affect the performance of the students but not change overtime.
+So school 1 can be located in a wealthy location with heavy parent involment and easy access to resources. School 2 can be an urban school with moderate resources and a larger diversity within students. School 3 will be a rural school with limited access to resources and smaller class sizes. 
+
+To create our model:
+MathScore = α_i + β*Time_t + ε_it
+
+Where our MathScore is equal to the test score for school (i) at time (t). a_i is the fixed effect for school (i) as it captures each school baseline performance. β is the common effect of the technolgy program we implement over time and will be the same across all schools. Time_t is the months since the program was implemented.
+
+The fixed effects (a_i) will account for time invariant school characteristics like location, demographics, and resources. The common slope (β) assumes the technology has the same rate of improvement across all schools. This will allow us to isolate the effect of our program while being able to monitor and control the differences between our chosen schools. 
+
+
 2. Write a Python program that performs a bootstrap simulation to find the variance in the mean of the Pareto distribution when different samples are taken.  Explain what you had to do for this.  As you make the full sample size bigger (for the same distribution), what happens to the variance of the mean of the samples?  Does it stay about the same, get smaller, or get bigger?
+
+For this - I had to generate original samples first. I used the samples 50, 100, 200, 500 1000, 2000, and 5000. I drew a random sample from the PAreto distribution and this became my "original dataset" to bootstrap from. For each original sample, I then performed 1000 bootstrap iterations where I randomly selected "n" observations from the original sample (where n is = to the original sample size) and found the mean of each bootstrap sample. So we ended up with 1000 bootstrap means. I then took all 1000 bootstrap means we calculated and calculated their variance. This was to understand how much the sample mean varies due to random sampling. I then repeated this for each sample size and compared how the cariance changed as the sample size increased. 
+
+For my findings, I found that the variance gets smaller as the sample size increaes. To see this:
+My Test (Pareto α=2.5):
+n=50: Bootstrap variance = 0.009519
+n=100: Bootstrap variance = 0.006925
+n=500: Bootstrap variance = 0.007723
+n=1000: Bootstrap variance = 0.000944
+n=5000: Bootstrap variance = 0.000423
+
+As we can see, as "n" increases, variance decreases dramatically. This is consistent with the Central Limit Theorem where the variance of sample mean = σ²/n and σ² is population variance and n is sample size.
+
 
 Homework reflection 3
 
 1. In the event study in Coding Quiz 3, how would we go about testing for a change in the second derivative as well?
+
 To test for changes in the second derivative (curvature) at an event, we need to extend our regression model to include terms that capture acceleration changes.
 
 The Standard Event Study model from Coding Quiz 3:
@@ -107,6 +136,22 @@ Breakdown:
 We can use the differences-in-differences assuming that  without the salary cap, NHL and MLB would have had parallel trends in competitive balance. In sports, salary caps should reduce payroll disparities between teams, lower payroll disparities should lead to more balanced competition, and we can expect a reduced standard deviation of win percentages (more parity meaning a better competitve balance). 
 
 My hypothesis: Salary cap implementation increases competitive balance
+
+To test for nonzero treatment effect:
+Research Question: Does the NHL salary cap have a nonzero effect on competitive balance?
+Null Hypothesis (H₀): β₃ = 0 (no treatment effect)
+Alternative Hypothesis (H₁): β₃ ≠ 0 (nonzero treatment effect)
+- Where β₃ is the DID coefficient in: Y = α + β₁*NHL + β₂*Post + β₃*(NHL×Post) + ε
+
+I will use multiple approaches to test this hypothesis:
+1. Manual DID calculation with t-test
+2. Regression-based DID with statistical inference
+3. Bootstrap confidence intervals
+4. Visual inspection of treatment effect
+
+![alt text](week_3_reflection_q2.png)
+Based on my analysis, I performed multiple statistical tests to determine whether the NHL salary cap had a nonzero treatment effect on competitive balance. I conducted a manual DID calculation with t-test and found a treatment effect of -0.0227 with a t-statistic of -4.534 and p-value of 0.000014, strongly rejecting the null hypothesis. I then performed a regression-based DID analysis using the model Y = α + β₁×NHL + β₂×Post + β₃×(NHL×Post) + ε and found the same coefficient (β₃ = -0.0227) with identical statistical significance (p < 0.0001). I calculated 95% and 99% confidence intervals using the regression standard errors and found that both intervals [-0.0326, -0.0128] and [-0.0358, -0.0096] exclude zero entirely. Additionally, I performed bootstrap analysis with 1,000 replications and found a bootstrap confidence interval of [-0.0314, -0.0129] that also excludes zero. All five testing approaches unanimously provide evidence of a statistically significant nonzero treatment effect, with the negative coefficient indicating that the salary cap successfully improved competitive balance by reducing the variation in team win percentages. For further review of my test code, please refer to week_3_quiz_reflection.ipynb.
+
 
 
 Homework reflection 4
@@ -239,20 +284,14 @@ c. Instrument weakness in some of the ranges
 
 ![alt text](DatasetB_CollegeOutcomeVSTestScore.png)
 
-ANALYZING Dataset A
+Analysis of Dataset A
 ------------------------------------------------------------
 Total observations in dataset: 100000
 Observations in window [60, 100]: 97772
-SUCCESS: Proceeding with analysis
    X range in window: [60.0, 100.0]
    Y range in window: [0.0, 1.0]
    Unique Y values: [0 1]
    Binary outcome (0/1): True
-   Fitting logistic regression...
-   Creating Plot 1: Raw Data with Jitter
-   Creating Plot 2: Binned Averages with Logistic Regression
-   Creating Plot 3: Moving Average with Confidence Bands
-   Creating Plot 4: Separate Logistic Fits Before/After Cutoff
    Observations before cutoff: 47698
    Observations after cutoff: 50074
 
@@ -266,22 +305,16 @@ SUCCESS: Proceeding with analysis
    - Slope before cutoff: 0.001231
    - Slope after cutoff: 0.000672
    - Slope change: -0.000560
-   - Large discontinuity detected - strong treatment effect
+   - Large discontinuity - strong treatment effect
 
-ANALYZING Dataset B
+Analysis of Dataset B
 ------------------------------------------------------------
 Total observations in dataset: 100000
 Observations in window [60, 100]: 97716
-SUCCESS: Proceeding with analysis
    X range in window: [60.0, 100.0]
    Y range in window: [0.0, 1.0]
    Unique Y values: [0 1]
    Binary outcome (0/1): True
-   Fitting logistic regression...
-   Creating Plot 1: Raw Data with Jitter
-   Creating Plot 2: Binned Averages with Logistic Regression
-   Creating Plot 3: Moving Average with Confidence Bands
-   Creating Plot 4: Separate Logistic Fits Before/After Cutoff
    Observations before cutoff: 47784
    Observations after cutoff: 49932
 
@@ -295,7 +328,7 @@ SUCCESS: Proceeding with analysis
    - Slope before cutoff: 0.044387
    - Slope after cutoff: 0.106180
    - Slope change: 0.061793
-   - Large discontinuity detected - strong treatment effect
+   - Large discontinuity - strong treatment effect
 
 I used 5 solutions to analyze and plot this data to make it readable.
 1. Adding Jitter To Raw Data Scatter Plot
