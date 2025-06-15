@@ -1,12 +1,14 @@
 Homework reflection 1
 
+As a preface, I have separate notebooks that I created for each week with the full code if needed for all of these answers. However for now I am just answering the questions with discussion of my process, visuals from my plots, and some snippets of code. Please let me know if you need more in my submission. Thanks - AM
+
 1. In Coding Quiz 1, you are asked to find the distance of the farthest match in a set.  Is this farthest match distance too far to be a meaningful match?  How can you decide this?
 
 In the first quiz, I found that the farthest match distance is ~0.21. I believe that this farthest match distance is too far to be a meaningful match. This is because of several reasons:
 a. The distance represents about 21% of the entire range of the Z variable. The Z variable spans from 0 to 1. This means that it is a substantial distance in the context of the dataset.
 b. When using the radius approach in the quiz, we used a radius of 0.2 which might suggest that 0.2 is a reasonable threshold for meaningful matches. Sing 0.21 is over this (barely) we can say it shows that at least one match falls outside of what would be an acceptable distance.
 c. At the end of the quiz, I visualized the nearest neighbor matching and radius matching. We can see that matches with larger distances connect points that appear visually distinct, suggesting poorer quality matching.
-d. In the nearest neighbor matching, we saw that excessivly large distances can introduce vias because they force comparisons between units that are not fundamentally similar. This goes against the assumption that matches pairs should be similar on observed covariates.
+d. In the nearest neighbor matching, we saw that excessivly large distances can introduce bias because they force comparisons between units that are not fundamentally similar. This goes against the assumption that matches pairs should be similar on observed covariates.
 We can further decide this by considering the distribution of the covariate (Z), examine how the effect estimate changes when excliding distanct matches, and apply domain knowledge about what a meaningful similarity would be in the context of the data.
 
 
@@ -49,14 +51,13 @@ There are several advantages we observed from performing this method.
 - Using propensity scores and calibrating the caliper to the std deviation has theoretical justification. Plus we visualize mamtches via our histogram and scatter plots.
 
 This method differs from the original two methods:
-Versus Method A (Best 1:1 Match):
+Comparison to Method A (Best 1:1 Match):
 - Uses propensity scores instead of raw Z values
 - Allows multiple control matches per treatment rather than just one
 - Rejects treatment observations that have no good matches within the caliper
 - Permits control observations to be matched multiple times
 
-
-Versus Method B (Radius Matching):
+Comparison to Method B (Radius Matching):
 - Uses a data-driven caliper (proportion of standard deviation) rather than fixed radius
 - Matches based on propensity scores rather than raw Z values
 - Scales the matching threshold according to the data's distribution
@@ -151,7 +152,6 @@ I will use multiple approaches to test this hypothesis:
 
 ![alt text](week_3_reflection_q2.png)
 Based on my analysis, I performed multiple statistical tests to determine whether the NHL salary cap had a nonzero treatment effect on competitive balance. I conducted a manual DID calculation with t-test and found a treatment effect of -0.0227 with a t-statistic of -4.534 and p-value of 0.000014, strongly rejecting the null hypothesis. I then performed a regression-based DID analysis using the model Y = α + β₁×NHL + β₂×Post + β₃×(NHL×Post) + ε and found the same coefficient (β₃ = -0.0227) with identical statistical significance (p < 0.0001). I calculated 95% and 99% confidence intervals using the regression standard errors and found that both intervals [-0.0326, -0.0128] and [-0.0358, -0.0096] exclude zero entirely. Additionally, I performed bootstrap analysis with 1,000 replications and found a bootstrap confidence interval of [-0.0314, -0.0129] that also excludes zero. All five testing approaches unanimously provide evidence of a statistically significant nonzero treatment effect, with the negative coefficient indicating that the salary cap successfully improved competitive balance by reducing the variation in team win percentages. For further review of my test code, please refer to week_3_quiz_reflection.ipynb.
-
 
 
 Homework reflection 4
