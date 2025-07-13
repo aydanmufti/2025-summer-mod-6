@@ -69,7 +69,7 @@ Confounder: Family Wealth (affects both education and income)
 Collider: Job Satisfaction (affected by both education and income)
 Mediator: Professional Networking
 
-Key relationships:
+Relationships:
 Confounder - Family Wealth:
 Family Wealth → Education (wealthy families afford better education)
 Family Wealth → Income (inheritance, connections, opportunities)
