@@ -279,3 +279,208 @@ To answer the question, if the p-value is less than 0.05, does this mean the coe
 Homework Reflection 8
 
 Include the code you used to solve the two coding quiz problems and write about the obstacles / challenges / insights you encountered while solving them.
+
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from scipy.spatial.distance import mahalanobis
+# Load the datasets
+data1 = pd.read_csv('homework_8.1.csv')  # For questions 1 and 2
+data2 = pd.read_csv('homework_8.2.csv')  # For questions 3 and 4
+print(f"Dataset 1 has {len(data1)} rows")
+print(f"Dataset 2 has {len(data2)} rows")
+QUESTION 1: Average Treatment Effect with Inverse Probability Weighting
+
+# Step 1: Look at our data
+print("Data:")
+print(data1.head())
+print(f"\nColumns: {list(data1.columns)}")
+
+# Count how many people got treatment vs control
+treated_people = data1[data1['X'] == 1]
+control_people = data1[data1['X'] == 0]
+print(f"\nTreated people (X=1): {len(treated_people)}")
+print(f"Control people (X=0): {len(control_people)}")
+
+# Step 2: Estimate propensity scores using logistic regression
+print("\nStep 2: Estimating the propensity scores")
+# We need to predict X (treatment) from Z (the confounder)
+
+# Prepare the data for logistic regression
+Z_values = data1[['Z']]  # Features (just Z)
+X_values = data1['X']    # What we want to predict (treatment assignment)
+
+# Fit the logistic regression model
+logistic_model = LogisticRegression()
+logistic_model.fit(Z_values, X_values)
+
+# Get propensity scores (probability of getting treatment)
+propensity_scores = logistic_model.predict_proba(Z_values)[:, 1]
+
+print(f"Propensity scores calculated!")
+print(f"Minimum propensity score: {min(propensity_scores):.4f}")
+print(f"Maximum propensity score: {max(propensity_scores):.4f}")
+print(f"Average propensity score: {np.mean(propensity_scores):.4f}")
+
+# Step 3: Calculate inverse probability weights
+print("\nStep 3: Calculate the weights")
+weights = []
+
+for i in range(len(data1)):
+    person = data1.iloc[i]
+    prop_score = propensity_scores[i]
+    
+    if person['X'] == 1:  # If person got treatment
+        weight = 1 / prop_score  # Weight = 1 / P(treatment)
+    else:  # If person got control
+        weight = 1 / (1 - prop_score)  # Weight = 1 / P(control)
+    
+    weights.append(weight)
+
+weights = np.array(weights)
+print(f"Weights calculated!")
+print(f"Minimum weight: {min(weights):.4f}")
+print(f"Maximum weight: {max(weights):.4f}")
+
+# Step 4: Calculate weighted average treatment effect
+print("\nStep 4: Calculating the ATE")
+
+# Calculate weighted means for treated and control groups
+treated_outcomes = []
+treated_weights = []
+control_outcomes = []
+control_weights = []
+
+for i in range(len(data1)):
+    person = data1.iloc[i]
+    if person['X'] == 1:  # Treated person
+        treated_outcomes.append(person['Y'])
+        treated_weights.append(weights[i])
+    else:  # Control person
+        control_outcomes.append(person['Y'])
+        control_weights.append(weights[i])
+
+# Calculate weighted averages
+weighted_treated_mean = np.average(treated_outcomes, weights=treated_weights)
+weighted_control_mean = np.average(control_outcomes, weights=control_weights)
+
+# The ATE is the difference
+ate = weighted_treated_mean - weighted_control_mean
+
+print(f"Weighted average outcome for treated group: {weighted_treated_mean:.4f}")
+print(f"Weighted average outcome for control group: {weighted_control_mean:.4f}")
+print(f"Average Treatment Effect (ATE): {ate:.4f}")
+print(f"ATE rounded to 1 decimal: {ate:.1f}")
+
+QUESTION 2: Propensity Scores of First Three Items
+first_three_scores = propensity_scores[:3]
+print("The first three propensity scores are:")
+for i in range(3):
+    print(f"Person {i+1}: {first_three_scores[i]:.2f}")
+
+print(f"\nAnswer: [{first_three_scores[0]:.2f}, {first_three_scores[1]:.2f}, {first_three_scores[2]:.2f}]")
+QUESTION 3: Mahalanobis Distance Matching
+# Step 1: Look at the second dataset
+print("Dataset 2:")
+print(data2.head())
+print(f"Columns: {list(data2.columns)}")
+
+# Separate treated and untreated people
+treated_data = data2[data2['X'] == 1]
+untreated_data = data2[data2['X'] == 0]
+print(f"\nTreated people: {len(treated_data)}")
+print(f"Untreated people: {len(untreated_data)}")
+
+# Step 2: Calculate covariance matrix for Z1 and Z2
+print("\nStep 2: Covariance matrix")
+
+# Get all Z1 and Z2 values
+all_z1 = data2['Z1'].values
+all_z2 = data2['Z2'].values
+
+# Create a matrix with Z1 and Z2 columns
+Z_matrix = np.column_stack([all_z1, all_z2])
+
+# Calculate covariance matrix
+cov_matrix = np.cov(Z_matrix.T)  # .T means transpose
+print("Covariance matrix:")
+print(cov_matrix)
+
+# Calculate inverse covariance matrix
+inv_cov_matrix = np.linalg.inv(cov_matrix)
+print("\nInverse covariance matrix:")
+print(inv_cov_matrix)
+
+# Step 3: Match each treated person to nearest untreated person
+print("\nStep 3: Finding matches using Mahalanobis distance")
+
+treatment_effects = []
+
+# Go through each treated person
+for treated_index, treated_person in treated_data.iterrows():
+    treated_z = [treated_person['Z1'], treated_person['Z2']]
+    
+    best_match_distance = float('inf')  # Start with infinite distance
+    best_match_outcome = None
+    
+    # Compare with every untreated person
+    for untreated_index, untreated_person in untreated_data.iterrows():
+        untreated_z = [untreated_person['Z1'], untreated_person['Z2']]
+        
+        # Calculate Mahalanobis distance
+        distance = mahalanobis(treated_z, untreated_z, inv_cov_matrix)
+        
+        # If this is the closest match so far, remember it
+        if distance < best_match_distance:
+            best_match_distance = distance
+            best_match_outcome = untreated_person['Y']
+    
+    # Calculate treatment effect for this matched pair
+    individual_effect = treated_person['Y'] - best_match_outcome
+    treatment_effects.append(individual_effect)
+
+# Step 4: Calculate average treatment effect
+ate_mahalanobis = np.mean(treatment_effects)
+
+print(f"Matched {len(treatment_effects)} treated people to untreated people")
+print(f"Average Treatment Effect: {ate_mahalanobis:.4f}")
+print(f"ATE rounded to 1 decimal: {ate_mahalanobis:.1f}")
+QUESTION 4: Finding the Treated Item with Least Common Support
+worst_support_distance = 0
+worst_support_person = None
+worst_support_z1 = None
+worst_support_z2 = None
+
+# Go through each treated person
+for treated_index, treated_person in treated_data.iterrows():
+    treated_z = [treated_person['Z1'], treated_person['Z2']]
+    
+    # Find the distance to the CLOSEST untreated person
+    closest_distance = float('inf')
+    
+    for untreated_index, untreated_person in untreated_data.iterrows():
+        untreated_z = [untreated_person['Z1'], untreated_person['Z2']]
+        distance = mahalanobis(treated_z, untreated_z, inv_cov_matrix)
+        
+        if distance < closest_distance:
+            closest_distance = distance
+    
+    # If this person's closest match is farther than anyone else's,
+    # they have the least common support
+    if closest_distance > worst_support_distance:
+        worst_support_distance = closest_distance
+        worst_support_person = treated_person
+        worst_support_z1 = treated_person['Z1']
+        worst_support_z2 = treated_person['Z2']
+
+print(f"Treated person with least common support")
+print(f"Their Z1 value: {worst_support_z1:.1f}")
+print(f"Their Z2 value: {worst_support_z2:.1f}")
+print(f"Distance to nearest untreated person: {worst_support_distance:.4f}")
+
+print(f"Question 1 - ATE closest to: {ate:.1f}")
+print(f"Question 2 - First three propensity scores: [{first_three_scores[0]:.2f}, {first_three_scores[1]:.2f}, {first_three_scores[2]:.2f}]")
+print(f"Question 3 - ATE closest to: {ate_mahalanobis:.1f}")
+print(f"Question 4 - Z1, Z2 values: ({worst_support_z1:.1f}, {worst_support_z2:.1f})")
+
+While working through these problems, I encountered several key challenges that deepened my understanding of causal inference methods. The most difficult concept was understanding propensity scores and inverse probability weighting. It took time to grasp that we're predicting treatment assignment from confounders (not outcomes from treatment) and that the weights create a "pseudo-population" where treatment is independent of confounders. Implementing the Mahalanobis distance matching was technically challenging because I had to carefully manage the nested loops and understand why we use the full covariance matrix rather than simple Euclidean distance. The concept of "common support" in Question 4 was initially confusing until I realized it identifies treated units that are most dissimilar from any control units, making causal inference less reliable for these cases. Throughout the quiz, I made sure to add diagnostic print statements and checking intermediate results, especially since different methods (IPW vs. Mahalanobis) gave quite different estimates (2.3 vs. 3.4), highlighting how sensitive causal inference can be to methodological choices. This reinforced that these methods are approximations to randomized experiments, each with important assumptions and limitations.
