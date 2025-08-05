@@ -3,16 +3,310 @@ Homework Reflection 9
 1. Write some code that will use a simulation to estimate the standard deviation of the coefficient when there is heteroskedasticity.  
 Compare these standard errors to those found via statsmodels OLS or a similar linear regression model.
 
+I created a simulation where the error variance increases with X (heteroskedasticity: error_variance = 0.5 + 0.3 * X²). 
+My code generates 1000 datasets and compares three approaches to estimating standard errors:
+
+True Standard Error: From full simulation of the data generating process (1000 replications)
+OLS Standard Error: From statsmodels assuming homoskedasticity
+Bootstrap Standard Error: Resampling the original dataset 1000 times
+
+Results:
+True SE: 0.0391
+OLS SE: 0.0350 (underestimated by ~10%)
+Bootstrap SE: 0.0390 (very accurate!)
+
+Under heteroskedasticity, OLS standard errors are biased downward because they assume constant error variance. 
+The bootstrap correctly captures the true variability by resampling the actual heteroskedastic error structure. 
+This is why robust standard errors (like White's) are important when heteroskedasticity is present.
+hwreflection9.1.png
+
 2. Write some code that will use a simulation to estimate the standard deviation of the coefficient when errors are highly correlated / non-independent.
 Compare these standard errors to those found via statsmodels OlS or a similar linear regression model.
 
 Show that if the correlation between coefficients is high enough, then the estimated standard deviation of the coefficient, using bootstrap errors, 
 might not match that found by a full simulation of the Data Generating Process.  (This can be fixed if you have a huge amount of data for the bootstrap simulation.)
 
+I implemented an AR(1) error process where errors[i] = ρ * errors[i-1] + new_shock, testing correlation levels of 0.3, 0.6, and 0.9. 
+I used block bootstrap (block size = 50) to better preserve the correlation structure.
+
+Results:
+Correlation | True SE | OLS SE | Bootstrap SE
+     0.3    |  0.0210 | 0.0225 |      0.0164
+     0.6    |  0.0221 | 0.0212 |      0.0243  
+     0.9    |  0.0215 | 0.0231 |      0.0190
+
+With very high correlation (0.95) and limited data (n=500):
+True SE from full simulation: 0.0297
+Bootstrap SE (even with 2000 bootstrap samples): ~0.0224
+Bootstrap consistently underestimates by ~25%
+
+The bootstrap SE plateaus around 0.022-0.024 regardless of bootstrap sample size (100, 500, 1000, 2000). 
+This shows it's not a sample size issue but a fundamental limitation - the bootstrap cannot fully capture the correlation structure with limited original data.
+hwreflection9.2.png
+
+CODE: 
+## Homework Reflection 9
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+from scipy import stats
+from sklearn.utils import resample
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set random seed for reproducibility
+np.random.seed(42)
+### Heteroskedasticity Simulation
+# Generate data with heteroskedasticity where error variance increases with X
+def generate_heteroskedastic_data(n=1000, beta_true=2.5):
+    X = np.random.uniform(0, 10, n)
+    # Error variance increases with X (heteroskedasticity)
+    error_variance = 0.5 + 0.3 * X**2
+    errors = np.random.normal(0, np.sqrt(error_variance))
+    y = 1.0 + beta_true * X + errors
+    return X, y, beta_true
+
+# Run multiple simulations to estimate true standard deviation of coefficient
+def simulate_heteroskedastic_coefficients(n_simulations=1000, sample_size=1000):
+    coefficients = []
+    
+    for _ in range(n_simulations):
+        X, y, _ = generate_heteroskedastic_data(sample_size)
+        X_with_const = sm.add_constant(X)
+        model = sm.OLS(y, X_with_const).fit()
+        coefficients.append(model.params[1])  # Slope coefficient
+    
+    return np.array(coefficients)
+
+# Bootstrap estimation of standard error
+def bootstrap_heteroskedastic_se(X, y, n_bootstrap=1000):
+    n = len(X)
+    bootstrap_coefs = []
+    
+    for _ in range(n_bootstrap):
+        # Bootstrap sample
+        indices = resample(range(n), n_samples=n, random_state=None)
+        X_boot = X[indices]
+        y_boot = y[indices]
+        
+        # Fit model
+        X_boot_const = sm.add_constant(X_boot)
+        model = sm.OLS(y_boot, X_boot_const).fit()
+        bootstrap_coefs.append(model.params[1])
+    
+    return np.std(bootstrap_coefs)
+
+# Generate one dataset for comparison
+X, y, beta_true = generate_heteroskedastic_data(1000)
+X_const = sm.add_constant(X)
+
+# Fit OLS model
+ols_model = sm.OLS(y, X_const).fit()
+ols_se = ols_model.bse[1]  # Standard error from OLS
+ols_coef = ols_model.params[1]
+
+# Run full simulation to get true standard deviation
+sim_coefficients = simulate_heteroskedastic_coefficients(1000, 1000)
+true_se = np.std(sim_coefficients)
+
+# Bootstrap standard error
+bootstrap_se = bootstrap_heteroskedastic_se(X, y, 1000)
+
+print(f"True coefficient: {beta_true:.4f}")
+print(f"OLS estimate: {ols_coef:.4f}")
+print(f"True SE (from full simulation): {true_se:.4f}")
+print(f"OLS SE (assumes homoskedasticity): {ols_se:.4f}")
+print(f"Bootstrap SE: {bootstrap_se:.4f}")
+
+# Plot results
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+# Plot 1: Residuals vs fitted to show heteroskedasticity
+fitted = ols_model.fittedvalues
+residuals = ols_model.resid
+ax1.scatter(fitted, residuals, alpha=0.6)
+ax1.set_xlabel('Fitted Values')
+ax1.set_ylabel('Residuals')
+ax1.set_title('Residuals vs Fitted (Showing Heteroskedasticity)')
+ax1.axhline(y=0, color='r', linestyle='--')
+
+# Plot 2: Distribution of simulated coefficients
+ax2.hist(sim_coefficients, bins=50, alpha=0.7, density=True, label='Simulated Coefficients')
+ax2.axvline(beta_true, color='red', linestyle='--', linewidth=2, label=f'True β = {beta_true}')
+ax2.axvline(ols_coef, color='green', linestyle='--', linewidth=2, label=f'OLS Estimate = {ols_coef:.3f}')
+ax2.set_xlabel('Coefficient Value')
+ax2.set_ylabel('Density')
+ax2.set_title('Distribution of Simulated Coefficients (Heteroskedasticity)')
+ax2.legend()
+
+plt.tight_layout()
+plt.show()
+### Correlated Errors Simulation
+# Generate data with highly correlated errors (AR(1) process)
+def generate_correlated_errors_data(n=1000, beta_true=1.5, correlation=0.8):
+    X = np.random.uniform(0, 5, n)
+    
+    # Generate AR(1) correlated errors
+    errors = np.zeros(n)
+    errors[0] = np.random.normal(0, 1)
+    
+    for i in range(1, n):
+        errors[i] = correlation * errors[i-1] + np.random.normal(0, np.sqrt(1 - correlation**2))
+    
+    y = 2.0 + beta_true * X + errors
+    return X, y, beta_true
+
+# Run multiple simulations with correlated errors
+def simulate_correlated_coefficients(n_simulations=1000, sample_size=1000, correlation=0.8):
+    coefficients = []
+    
+    for _ in range(n_simulations):
+        X, y, _ = generate_correlated_errors_data(sample_size, correlation=correlation)
+        X_with_const = sm.add_constant(X)
+        model = sm.OLS(y, X_with_const).fit()
+        coefficients.append(model.params[1])
+    
+    return np.array(coefficients)
+
+# Bootstrap estimation with correlated errors
+def bootstrap_correlated_se(X, y, n_bootstrap=1000):
+    n = len(X)
+    bootstrap_coefs = []
+    
+    for _ in range(n_bootstrap):
+        # Block bootstrap to preserve correlation structure
+        block_size = min(50, n // 10)  # Use block bootstrap
+        n_blocks = n // block_size
+        
+        bootstrap_indices = []
+        for _ in range(n_blocks + 1):
+            start_idx = np.random.randint(0, n - block_size + 1)
+            bootstrap_indices.extend(range(start_idx, min(start_idx + block_size, n)))
+        
+        bootstrap_indices = bootstrap_indices[:n]  # Trim to exact size
+        
+        X_boot = X[bootstrap_indices]
+        y_boot = y[bootstrap_indices]
+        
+        X_boot_const = sm.add_constant(X_boot)
+        model = sm.OLS(y_boot, X_boot_const).fit()
+        bootstrap_coefs.append(model.params[1])
+    
+    return np.std(bootstrap_coefs)
+
+# Test with different correlation levels
+correlations = [0.3, 0.6, 0.9]
+results = []
+
+print("Comparing Standard Errors under Different Correlation Levels:")
+print("Correlation | True SE | OLS SE | Bootstrap SE | SE Ratio (Bootstrap/True)")
+print("-" * 75)
+
+for corr in correlations:
+    # Generate data
+    X, y, beta_true = generate_correlated_errors_data(1000, correlation=corr)
+    X_const = sm.add_constant(X)
+    
+    # OLS fit
+    ols_model = sm.OLS(y, X_const).fit()
+    ols_se = ols_model.bse[1]
+    
+    # True SE from simulation
+    sim_coefficients = simulate_correlated_coefficients(500, 1000, corr)
+    true_se = np.std(sim_coefficients)
+    
+    # Bootstrap SE
+    bootstrap_se = bootstrap_correlated_se(X, y, 500)
+    
+    se_ratio = bootstrap_se / true_se
+    
+    print(f"{corr:>11.1f} | {true_se:>7.4f} | {ols_se:>6.4f} | {bootstrap_se:>12.4f} | {se_ratio:>18.3f}")
+    
+    results.append({
+        'correlation': corr,
+        'true_se': true_se,
+        'ols_se': ols_se,
+        'bootstrap_se': bootstrap_se,
+        'coefficients': sim_coefficients
+    })
+### Bootstrap Failure With High Correlation
+# Generate data with very high correlation
+X, y, beta_true = generate_correlated_errors_data(500, correlation=0.95)  # Smaller sample
+
+# Compare bootstrap with different sample sizes
+bootstrap_sizes = [100, 500, 1000, 2000]
+true_coefficients = simulate_correlated_coefficients(1000, 500, 0.95)
+true_se = np.std(true_coefficients)
+
+print(f"True SE from full simulation: {true_se:.4f}")
+print("\nBootstrap Results with Different Bootstrap Sample Sizes:")
+print("Bootstrap Size | Bootstrap SE | Ratio to True SE")
+print("-" * 45)
+
+bootstrap_results = []
+for boot_size in bootstrap_sizes:
+    boot_se = bootstrap_correlated_se(X, y, boot_size)
+    ratio = boot_se / true_se
+    print(f"{boot_size:>13} | {boot_se:>11.4f} | {ratio:>15.3f}")
+    bootstrap_results.append(boot_se)
+
+# Final visualization
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+
+# Plot 1: Correlated errors time series
+X_demo, y_demo, _ = generate_correlated_errors_data(200, correlation=0.8)
+X_const_demo = sm.add_constant(X_demo)
+model_demo = sm.OLS(y_demo, X_const_demo).fit()
+residuals_demo = model_demo.resid
+
+ax1.plot(residuals_demo[:100])
+ax1.set_title('Correlated Residuals (First 100 observations)')
+ax1.set_xlabel('Observation')
+ax1.set_ylabel('Residual')
+
+# Plot 2: Autocorrelation of residuals
+from statsmodels.tsa.stattools import acf
+autocorr = acf(residuals_demo, nlags=20)
+ax2.bar(range(len(autocorr)), autocorr)
+ax2.set_title('Autocorrelation of Residuals')
+ax2.set_xlabel('Lag')
+ax2.set_ylabel('Autocorrelation')
+ax2.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+
+# Plot 3: SE comparison across correlations
+corr_vals = [r['correlation'] for r in results]
+true_ses = [r['true_se'] for r in results]
+ols_ses = [r['ols_se'] for r in results]
+boot_ses = [r['bootstrap_se'] for r in results]
+
+ax3.plot(corr_vals, true_ses, 'o-', label='True SE', linewidth=2)
+ax3.plot(corr_vals, ols_ses, 's-', label='OLS SE', linewidth=2)
+ax3.plot(corr_vals, boot_ses, '^-', label='Bootstrap SE', linewidth=2)
+ax3.set_xlabel('Error Correlation')
+ax3.set_ylabel('Standard Error')
+ax3.set_title('Standard Errors vs Error Correlation')
+ax3.legend()
+ax3.grid(True, alpha=0.3)
+
+# Plot 4: Bootstrap convergence
+ax4.plot(bootstrap_sizes, bootstrap_results, 'o-', linewidth=2, markersize=8)
+ax4.axhline(y=true_se, color='red', linestyle='--', linewidth=2, label=f'True SE = {true_se:.4f}')
+ax4.set_xlabel('Bootstrap Sample Size')
+ax4.set_ylabel('Bootstrap Standard Error')
+ax4.set_title('Bootstrap SE Convergence (High Correlation)')
+ax4.legend()
+ax4.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+######################################################################################################################################################
 Homework Reflection 10
 
 We are skipping this one, this time.
 
+######################################################################################################################################################
 Homework Reflection 11
 
 1. Construct a dataset for an event study where the value, derivative, and second derivative of a trend all change discontinuously (suddenly) after an event.
@@ -21,11 +315,143 @@ Build a model that tries to decide whether the event is real (has a nonzero effe
 (b) the value, derivative, and second derivative.
 Which of these models is better at detecting and/or quantifying the impact of the event?  (What might "better" mean here?)
 
+I created a dataset with 200 time periods where an event at time 100 causes three simultaneous discontinuities:
+
+Value jump: Immediate level increase
+Derivative change: Slope changes from 0.5 to 1.2 (becomes steeper)
+Second derivative change: Curvature changes from 0.01 to 0.005 (less curved)
+
+The data generating process was:
+Pre-event: y = 10 + 0.5*t + 0.01*t² + noise
+Post-event: y = 15 + 1.2*t + 0.005*t² + noise
+
+Model Comparison:
+Model A (Value Only): y = α + β₁*time + β₂*post_event + ε
+
+Event Effect: 33.275 (highly significant)
+R²: 0.9823
+
+Model B (Comprehensive): y = α + β₁*time + β₂*time² + β₃*post_event + β₄*(post_event*time) + β₅*(post_event*time²) + ε
+
+Event Effect (value): -0.193
+Derivative Change: 0.785
+Second Derivative Change: -0.005391
+R²: 0.9998
+
+Model B is significantly better for several reasons:
+1. Higher Explanatory Power: R² of 0.9998 vs 0.9823 (1.75 percentage point improvement)
+2. Accurate Parameter Estimates: Model B correctly decomposes the event into its three components, while Model A's massive "event effect" of 33.275 is largely spurious - it's incorrectly attributing trend changes to a level shift.
+3. Better Residual Behavior:
+    - Model A shows systematic residual patterns (visible in plots)
+    - Model B has randomly distributed residuals with much smaller variance (σ = 1.85 vs 18.29)
+4. voids Misspecification Bias: Model A cannot capture changing slopes and curvature, leading to biased estimates of the true event effect.
+
+By "better" here - it can be broken down like so:
+Accuracy: More precise estimates of each type of discontinuity
+Interpretability: Can separate immediate effects from trend changes
+Predictive Power: Better fit and forecasting ability
+Statistical Validity: Residuals meet model assumptions
+Policy Relevance: Correctly identifies the nature of the structural break
+
+
 2. Construct a dataset in which there are three groups whose values each increase discontinuously (suddenly) by the same amount at a shared event; they change in parallel
 over time, but they have different starting values.  Create a model that combines group fixed effects with an event study, as suggested in the online reading.
 Explain what you did, how the model works, and how it accounts for both baseline differences and the common event effect.
 
+I created a dataset with 450 observations (3 groups x 150 time periods) where:
+Three groups with different baseline levels:
+Group A: starts around 13
+Group B: starts around 27
+Group C: starts around 40
+
+Parallel trends: All groups follow the same time trend (0.3 units per period)
+Common event effect: At time 76, all groups experience the same discontinuous jump of 8 units
+Data generating process:
+y_it = α_i + 0.3 * time + 8 * post_event + ε_it
+Where α_i represents group-specific intercepts (10, 25, 40)
+
+Model Specification:
+I implemented a Group Fixed Effects Event Study model:
+y_it = α_i + β₁ * time + β₂ * post_event + ε_it
+Where:
+α_i = group-specific fixed effects (different intercepts for each group)
+β₁ = common time trend coefficient
+β₂ = common event effect coefficient
+i indexes groups, t indexes time periods
+Results:
+Common Event Effect: 8.221 (very close to true value of 8.0)
+Time Trend: 0.298 (very close to true value of 0.3)
+R²: 0.9951 vs 
+0.6413 for pooled model (35+ percentage point improvement)
+
+How the Model Works:
+1. Accounts for Baseline Differences: Each group gets its own intercept (α_i), which captures all time-invariant characteristics that make groups different. This removes bias from different starting levels.
+2. Identifies Common Patterns: The model estimates shared parameters:
+    - β₁ captures the common time trend all groups follow
+    - β₂ captures the common event effect all groups experience
+3. Uses Within-Group Variation: The model identifies the event effect by comparing each group's before/after change, then pools these estimates. This "differences out" any group-specific factors.
+4. Parallel Trends Assumption: The model assumes all groups would follow the same trajectory absent the event (satisfied in my data).
+
+How It Accounts for Both Effects:
+- Baseline Differences: Fixed effects (α_i) control for different group intercepts
+    Group A: lower baseline (~13)
+    Group B: medium baseline (~27)
+    Group C: higher baseline (~40)
+- Common Event Effect: The post_event coefficient (β₂ = 8.221) captures the shared treatment impact experienced by all groups simultaneously
+Evidence of Success:
+    - Pre/post differences are nearly identical across groups (Δ ≈ 30.6-30.7)
+    - Residuals show random scatter with no systematic patterns
+    - Model explains 99.51% of variation vs 64.13% without group controls
+Without fixed effects, the model would confound group differences with time effects, leading to biased estimates. Fixed effects isolate the causal event effect by using only within-group variation over time, making the estimates robust to unobserved group heterogeneity.
+This methodology forms the foundation of difference-in-differences analysis and is essential for credible causal identification in panel data settings.
+######################################################################################################################################################
 Homework Reflection 12
 
 Construct a dataset in which prior trends do not hold, and in which this makes the differences-in-differences come out wrong.  Explain why the
 differences-in-differences estimate of the effect comes out higher or lower than the actual effect.
+
+I created a dataset with two groups over 100 time periods where treatment begins at period 60:
+Treatment Group: Tech-savvy firms with accelerating pre-treatment growth
+    - Pre-treatment trend: y = 20 + 0.4×t + 0.008×t² (quadratic/accelerating)
+    - Post-treatment: Same accelerating trend + 5 units treatment effect
+
+Control Group: Traditional firms with steady linear growth
+    - All periods: y = 15 + 0.5×t (linear/constant slope)
+
+True treatment effect: 5 units
+
+Parallel Trends Violation:
+    - Treatment group pre-treatment slope: 0.88 (and accelerating)
+    - Control group pre-treatment slope: 0.48 (constant)
+    - Clear violation: different trajectories before treatment even begins
+
+Results:
+- DiD estimate: 42.89 units
+- True effect: 5.02 units
+- Bias: +37.87 units (755% overestimation)
+
+Why DiD Comes Out Higher Than the Actual Effect:
+1. DiD assumes both groups would follow parallel trends without treatment. My data violates this because:
+    - Treatment group has accelerating growth (quadratic trend)
+    - Control group has steady growth (linear trend)
+2. Bias - DiD calculates: (Treatment Change) - (Control Change)
+    - Treatment group change: 68.25 units (includes natural acceleration + treatment effect)
+    - Control group change: 25.35 units (just steady linear growth)
+    - DiD wrongly attributes the 42.89 unit difference to treatment
+3. What Happened:
+- True treatment effect: 5 units
+- Natural acceleration difference: ~38 units (treatment group was speeding up anyway)
+- DiD mistake: Attributed the natural acceleration to the treatment effect
+4. Mathematical Source of Bias:
+- The treatment group's pre-treatment acceleration (0.36 units per period faster than control) compounds over the 40 post-treatment periods. DiD uses the control group as a counterfactual, but this provides a poor baseline because it doesn't capture the treatment group's accelerating trajectory.
+5. Visualization Analysis:
+    - Treatment group follows a curved, accelerating path
+    - Control group follows a straight, linear path
+    - DiD assumes treatment would have followed the linear path (wrong!)
+    - The green shaded area (true effect ≈5) is tiny compared to what DiD estimates
+    - hwreflection12.png
+
+Why This Bias Direction (Overestimation):
+- DiD overestimates because the treatment group had faster underlying growth than the control group. If the treatment group had slower underlying growth than control, DiD would underestimate the effect.
+
+This demonstrates that DiD can produce catastrophically wrong estimates (755% error in this case) when the parallel trends assumption is violated. The method incorrectly attributes pre-existing differential growth patterns to the treatment effect.
